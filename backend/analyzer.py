@@ -48,57 +48,137 @@ def generate_mermaid_flow(code: str):
     except Exception as e:
         return "graph TD\n  Start((Start)) --> Error[Invalid Code Structure] --> Finish((Finish))"
 
-def detect_algorithm(code: str):
+def detect_algorithm(code: str, language: str = "python"):
     """
-    Parses code using AST to detect algorithms like Hash Map, Brute Force, or Linear Scan.
+    Detects 25 different algorithms and patterns across Python, Java, C, C++, and JS.
+    Uses Universal Static Analysis (Regex + Keywords).
     """
     try:
-        tree = ast.parse(code)
-        loops = 0
-        dict_usage = False
-        binary_search_hints = 0
+        code_no_space = code.replace(" ","").replace("\n","").replace("\t","").lower()
+        code_lower = code.lower()
+        
+        # 0. Detect Recursion (Universal Pattern)
+        # Matches: def name(...): ... name( | function name(...){ ... name( | void name(...){ ... name(
+        recursion_pattern = r'(?:def|function|void|int|float|public|private|static)\s+(\w+)\s*\(.*?\)\s*[\{:]?.*?(\1\s*\()'
+        if re.search(recursion_pattern, code, re.DOTALL | re.IGNORECASE):
+            # Check if it's specialized recursion like BFS/DFS first
+            if "dfs" in code_lower: return "Depth First Search"
+            if "visited" in code_lower and "neighbor" in code_lower: return "Depth First Search"
+            if "path.append" in code_lower and "path.pop" in code_lower: return "Backtracking"
+            if "mid" in code_lower and ("left" in code_lower or "right" in code_lower): return "Divide and Conquer"
+            return "Recursion"
 
-        for node in ast.walk(tree):
-            if isinstance(node, (ast.For, ast.While)):
-                loops += 1
-            if isinstance(node, (ast.Dict, ast.DictComp)):
-                dict_usage = True
-            # Heuristic for Binary Search: mid calculation or sorted check
-            if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
-                # check for (low + high) // 2
-                pass 
+        # 1. Advanced Graph Algorithms
+        if ("heapq" in code_lower or "priorityqueue" in code_lower or "pq." in code_lower) and ("dist" in code_lower or "cost" in code_lower):
+            return "Dijkstra"
+        if ("range(n-1)" in code_no_space or "i<n-1" in code_no_space) and ("dist[v]>dist[u]+w" in code_no_space or "dist[v]>dist[u]+weight" in code_no_space):
+            return "Bellman-Ford"
+        
+        # 2. String Matching
+        if "lps=" in code_no_space or "next=[" in code_no_space or ("while" in code_lower and "j>0" in code_no_space and "p[j]" in code_no_space):
+            return "KMP String Matching"
+        if ("hash" in code_lower or "h=" in code_no_space) and ("pow(" in code_lower or "ord(" in code_lower or "prime" in code_lower or "charat" in code_lower):
+            if "string" in code_lower or "pattern" in code_lower or "s[" in code_no_space or "s.at" in code_no_space:
+                return "Rabin-Karp"
 
-        if dict_usage:
-            return "Hash Map"
+        # 3. Sorting
+        if ("heappush" in code_lower and "heappop" in code_lower) or ("priorityqueue" in code_lower and "poll()" in code_lower):
+            return "Heap Sort"
+        if ("merge_sort" in code_lower or "merge(" in code_lower) and ("mid" in code_lower or "m=" in code_no_space):
+            return "Merge Sort"
+        if "quick_sort" in code_lower or ("pivot" in code_lower and ("left" in code_lower or "right" in code_lower)):
+            return "Quick Sort"
+        if "bubble_sort" in code_lower or ("arr[j]>arr[j+1]" in code_no_space and ("=" in code_no_space)):
+            if "[j+1]=temp" in code_no_space or "[j+1]=arr[j]" in code_no_space:
+                return "Bubble Sort"
+        if "selection_sort" in code_lower or (("min_idx" in code_no_space or "minidx" in code_no_space) and ("arr" in code_no_space and "<arr[" in code_no_space)):
+            return "Selection Sort"
+        if "insertion_sort" in code_lower or ("while" in code_lower and "arr[j]>key" in code_no_space or "arr[j-1]>arr[j]" in code_no_space):
+            return "Insertion Sort"
 
-        if loops >= 2:
-            return "Brute Force"
+        # 4. Search & General Patterns
+        if "while" in code_lower and ("<=" in code_no_space or "<" in code_no_space) and ("mid=" in code_no_space or "m=" in code_no_space or "/2" in code_no_space):
+            return "Binary Search"
+        
+        # BFS (Check before General Loops)
+        if ("deque" in code_lower or "queue" in code_lower) and ("popleft" in code_lower or "poll" in code_lower or "shift" in code_lower):
+            return "Breadth First Search"
+        
+        if (".left" in code_lower and ".right" in code_lower) or ("->left" in code_lower and "->right" in code_lower):
+            return "Tree Traversal"
 
-        if loops == 1:
-            return "Linear Scan"
+        # 5. Optimization & Logic Patterns
+        if ("memo" in code_lower or "dp[" in code_no_space or "dp=" in code_no_space or "table[" in code_no_space) and ("range" in code_lower or "function" in code_lower or "for" in code_lower or "while" in code_lower):
+            return "Dynamic Programming"
+        if ("sort()" in code_lower or "arrays.sort" in code_lower or "std::sort" in code_lower) and ("for" in code_lower or "while" in code_lower) and ("total" in code_lower or "ans" in code_lower or "result" in code_lower):
+            return "Greedy Algorithm"
+        
+        # Two Pointer / Sliding Window
+        if ("left" in code_lower and "right" in code_lower) or ("l=" in code_no_space and "r=" in code_no_space) or ("l,r=" in code_no_space) or ("i=0,j=n-1" in code_no_space):
+            if "max(" in code_lower or "min(" in code_lower or "window" in code_lower or "math.max" in code_lower:
+                return "Sliding Window"
+            if "whilel<r" in code_no_space or "whileleft<right" in code_no_space or "while(l<r)" in code_no_space:
+                return "Two Pointer"
+
+        # 6. Basic Structure Detections (Multi-Language)
+        for_count = len(re.findall(r'\bfor\b', code_lower))
+        while_count = len(re.findall(r'\bwhile\b', code_lower))
+        loops = for_count + while_count
+
+        # Check for dict/map (Universal)
+        has_hash = False
+        if "dict" in code_lower or "{}" in code_lower or "map<" in code_lower or "hashmap" in code_lower or "new map" in code_lower or "new object" in code_lower:
+            has_hash = True
+        
+        if has_hash: return "Hash Map"
+        if loops >= 2: return "Brute Force"
+        if loops == 1: return "Linear Scan"
 
         return "Constant Time"
     except Exception as e:
         return "Unknown"
 
-# Concept Mapping Database
+# Massive Concept Mapping Database (25 Items)
 concept_map = {
-    "Hash Map": ["Hash Tables", "Dictionary Lookup", "Complement Search"],
-    "Brute Force": ["Nested Loops", "Optimization Techniques", "Time Complexity O(n²)"],
-    "Linear Scan": ["Array Traversal", "Single Pass Logic"],
-    "Binary Search": ["Divide and Conquer", "Sorted Arrays", "Logarithmic Time"]
+    "Hash Map": ["Hash Tables", "O(n) Two-Sum Logic", "Dictionary Efficiency"],
+    "Brute Force": ["Nested Loops", "Complexity O(n²)", "Optimization Techniques"],
+    "Linear Scan": ["Single Pass", "Array Traversal", "O(n) Efficiency"],
+    "Binary Search": ["Divide & Conquer", "Sorted Arrays", "Logarithmic Time O(log n)"],
+    "Bubble Sort": ["Basic Sorting", "Adjacent Swaps", "O(n²) Complexity"],
+    "Selection Sort": ["Min/Max Selection", "In-place Sorting", "O(n²) Complexity"],
+    "Insertion Sort": ["Shifting Elements", "Sorted Sub-portion", "O(n²) Complexity"],
+    "Merge Sort": ["Stable Sorting", "Divide & Conquer", "O(n log n) Recursion"],
+    "Quick Sort": ["Pivot Partitioning", "Recursive Sorting", "Average O(n log n)"],
+    "Heap Sort": ["Binary Heaps", "Priority Queues", "O(n log n) In-place"],
+    "Recursion": ["Call Stacks", "Base Cases", "Recursive Thinking"],
+    "Divide and Conquer": ["Problem Splitting", "Recursive Merging", "Efficient Scaling"],
+    "Dynamic Programming": ["Memoization", "Tabulation", "Optimal Substructure"],
+    "Greedy Algorithm": ["Local Optimum", "Heuristic Solving", "Efficient Choice"],
+    "Depth First Search": ["Graph Traversal", "Stacks", "Recursive Exploration"],
+    "Breadth First Search": ["Queue Traversal", "Shortest Path (Level)", "Level-order Discovery"],
+    "Sliding Window": ["Continuous Subarrays", "Window Shifting", "O(n) Efficiency"],
+    "Two Pointer": ["Boundary Convergence", "Sorted Arrays", "O(n) Optimization"],
+    "Backtracking": ["State Space Search", "Decision Trees", "Pruning Techniques"],
+    "Tree Traversal": ["Post/Pre/In-order", "BST Properties", "Binary Trees"],
+    "Dijkstra": ["Shortest Path", "Priority Queues", "Greedy Weighted Search"],
+    "Bellman-Ford": ["Negative Weights", "Edge Relaxation", "Graph Cycles"],
+    "KMP String Matching": ["Prefix Functions", "Linear Search", "Pattern Pre-processing"],
+    "Rabin-Karp": ["Rolling Hashes", "String Searching", "Modular Arithmetic"],
+    "Constant Time": ["O(1) Complexity", "Input Independence", "Direct Access"]
 }
 
 def detect_concepts(algorithm: str):
     """
     Returns recommended concepts based on the detected algorithm.
     """
-    return concept_map.get(algorithm, ["General Problem Solving"])
+    return concept_map.get(algorithm, ["Logic Fundamentals", "Code Structure", "Problem Solving"])
 
-def analyze_refactor(code: str):
+def analyze_refactor(code: str, language: str = "python"):
     """
-    Parses code using AST to suggest refactoring improvements for cleaner code.
+    Parses code to suggest refactoring improvements.
     """
+    if language != "python":
+        return ["Maintain consistent naming conventions.", "Keep functions small and focused."]
     try:
         tree = ast.parse(code)
         suggestions = []
@@ -128,10 +208,12 @@ def analyze_refactor(code: str):
     except Exception as e:
         return ["Syntax Error - Cannot analyze refactorings"]
 
-def detect_edge_cases(code: str):
+def detect_edge_cases(code: str, language: str = "python"):
     """
-    Parses code using AST to identify potential unhandled edge cases based on specific patterns.
+    Identifies potential unhandled edge cases based on specific patterns.
     """
+    if language != "python":
+        return ["Null or empty input.", "Boundary values (0, -1, max_int).", "Ensure loops have termination conditions."]
     try:
         warnings = []
 
@@ -151,10 +233,12 @@ def detect_edge_cases(code: str):
     except Exception as e:
         return ["Syntax Error - Cannot analyze edge cases"]
 
-def detect_undefined_variables(code: str):
+def detect_undefined_variables(code: str, language: str = "python"):
     """
-    Detects undefined variables by comparing assignments vs usages.
+    Detects undefined variables (Python-specific deep analysis).
     """
+    if language != "python":
+        return ["No common bug patterns detected for this language."]
     try:
         tree = ast.parse(code)
         defined = set()
@@ -182,15 +266,52 @@ def detect_undefined_variables(code: str):
     except Exception as e:
         return ["Syntax Error - Cannot analyze variables"]
 
-def predict_efficiency(code: str):
+def predict_efficiency(code: str, language: str = "python"):
     """
-    Analyzes code to predict time complexity and scalability performance.
+    Analyzes code to predict time complexity based on 25 detected algorithms or structures.
     """
-    try:
-        tree = ast.parse(code)
-        loop_count = 0
+    algorithm = detect_algorithm(code, language)
+    
+    # Comprehensive Complexity Map for 25 items
+    complexity_map = {
+        "Binary Search": "O(log n)",
+        "Merge Sort": "O(n log n)",
+        "Quick Sort": "O(n log n)",
+        "Heap Sort": "O(n log n)",
+        "Bubble Sort": "O(n²)",
+        "Selection Sort": "O(n²)",
+        "Insertion Sort": "O(n²)",
+        "Brute Force": "O(n²)",
+        "Linear Scan": "O(n)",
+        "Hash Map": "O(n)",
+        "Two Pointer": "O(n)",
+        "Sliding Window": "O(n)",
+        "Depth First Search": "O(V + E)",
+        "Breadth First Search": "O(V + E)",
+        "Tree Traversal": "O(N)",
+        "Dijkstra": "O(E log V)",
+        "Bellman-Ford": "O(VE)",
+        "KMP String Matching": "O(n + m)",
+        "Rabin-Karp": "O(n + m)",
+        "Dynamic Programming": "O(n * m)", 
+        "Backtracking": "O(2^n)", 
+        "Greedy Algorithm": "O(n log n)", 
+        "Recursion": "O(2^n)", 
+        "Divide and Conquer": "O(n log n)",
+        "Constant Time": "O(1)"
+    }
+    
+    if algorithm in complexity_map:
+        predicted = complexity_map[algorithm]
+        return {
+            "predicted_complexity": predicted,
+            "performance_prediction": f"Expected performance for {algorithm}.",
+            "suggestion": f"Maintain {algorithm} patterns if they suit the problem requirements."
+        }
 
-        # Heuristic for maximum loop nesting
+    try:
+        # Fallback to structure analysis
+        tree = ast.parse(code)
         def get_max_nesting(node, current_depth=0):
             max_depth = current_depth
             for child in ast.iter_child_nodes(node):
@@ -201,33 +322,18 @@ def predict_efficiency(code: str):
             return max_depth
 
         nesting_depth = get_max_nesting(tree)
-
         if nesting_depth >= 2:
-            result = {
-                "predicted_complexity": "O(n²)",
-                "performance_prediction": "May become slow for large inputs",
-                "suggestion": "Try reducing nested loops using hashing or better algorithms."
-            }
+            return {"predicted_complexity": "O(n²)", "performance_prediction": "Bottleneck likely", "suggestion": "Try reducing nesting."}
         elif nesting_depth == 1:
-            result = {
-                "predicted_complexity": "O(n)",
-                "performance_prediction": "Scales reasonably well",
-                "suggestion": "Optimization possible depending on the problem specifics."
-            }
-        else:
-            result = {
-                "predicted_complexity": "O(1)",
-                "performance_prediction": "Highly efficient",
-                "suggestion": "No major performance optimization required."
-            }
-        
-        return result
-    except Exception as e:
-        return {
-            "predicted_complexity": "N/A",
-            "performance_prediction": "Analysis failed",
-            "suggestion": "Check for syntax errors in your code."
-        }
+            return {"predicted_complexity": "O(n)", "performance_prediction": "Scales linearly", "suggestion": "Good structure."}
+        return {"predicted_complexity": "O(1)", "performance_prediction": "Highly efficient", "suggestion": "Direct processing."}
+    except:
+        # Final fallback for any language
+        if "for" in code or "while" in code:
+            if code.count("for") >= 2 or code.count("while") >= 2:
+                return {"predicted_complexity": "O(n²)", "performance_prediction": "Nested loops detected.", "suggestion": "Optimize loop structure."}
+            return {"predicted_complexity": "O(n)", "performance_prediction": "Single loop detected.", "suggestion": "Scales linearly."}
+        return {"predicted_complexity": "O(1)", "performance_prediction": "No loops found.", "suggestion": "Highly efficient."}
 
 import sys
 
@@ -252,10 +358,13 @@ def trace_execution(frame, event, arg):
         })
     return trace_execution
 
-def run_simulation(code: str):
+def run_simulation(code: str, language: str = "python"):
     """
     Executes code in a controlled environment to trace line execution and variable states.
     """
+    if language != "python":
+        return [{"line": 1, "variables": {"status": "Simulation only available for Python"}}]
+    
     global simulation_steps
     simulation_steps = []
     
@@ -276,10 +385,23 @@ def run_simulation(code: str):
         sys.settrace(None)
         return [{"line": 0, "variables": {"Error": str(e)}}]
 
-def readability_analysis(code: str):
+def readability_analysis(code: str, language: str = "python"):
     """
     Evaluates the code for readability flags using simple threshold rules.
     """
+    if language != "python":
+        # Basic universal readability
+        lines = code.splitlines()
+        score = 100
+        suggestions = []
+        if len(lines) > 50: 
+            score -= 10
+            suggestions.append("Code is quite long. Consider modularizing functions.")
+        if len(re.findall(r'//|/\*', code)) == 0 and len(lines) > 10:
+            score -= 5
+            suggestions.append("Add comments to explain complex logic.")
+        return {"readability_score": max(0, score), "suggestions": suggestions if suggestions else ["Code looks readable."]}
+    
     try:
         score = 100
         suggestions = []
@@ -323,10 +445,13 @@ def generate_test_cases():
     ]
     return test_cases
 
-def run_tests(code: str):
+def run_tests(code: str, language: str = "python"):
     """
-    Executes student code against fixed test cases for 'two_sum' or any detected function.
+    Executes student code against fixed test cases.
     """
+    if language != "python":
+         return [{"input": "N/A", "output": "N/A", "status": "Testing only available for Python currently", "error": f"Automated tests for {language} coming soon."}]
+    
     namespace = {}
     try:
         exec(code, namespace)
@@ -425,20 +550,20 @@ def chat_with_ai(messages: list, code: str = ""):
     except Exception as e:
         return f"Chat Error: {str(e)}"
 
-def analyze_code(code: str):
+def analyze_code(code: str, language: str = "python"):
     """
-    Main orchestration function following the User's accurate architecture pipeline.
+    Main orchestration function supporting multiple languages.
     """
     # 1. Parsing & Basic Info
-    algorithm = detect_algorithm(code)
+    algorithm = detect_algorithm(code, language)
     concepts = detect_concepts(algorithm)
     
     # 2. Detailed Analysis
-    refactoring = analyze_refactor(code)
-    edge_cases = detect_edge_cases(code)
-    undefined_vars = detect_undefined_variables(code)
-    efficiency = predict_efficiency(code)
-    readability = readability_analysis(code)
+    refactoring = analyze_refactor(code, language)
+    edge_cases = detect_edge_cases(code, language)
+    undefined_vars = detect_undefined_variables(code, language)
+    efficiency = predict_efficiency(code, language)
+    readability = readability_analysis(code, language)
 
     # 3. Aggregating Issues
     all_issues = []

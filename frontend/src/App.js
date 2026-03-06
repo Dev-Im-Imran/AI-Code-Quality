@@ -1328,7 +1328,7 @@ function App() {
                   <h2 className="section-title text-purple">Analysis Breakdown</h2>
 
                   <div className="radar-container">
-                    <ResponsiveContainer width="100%" height="100%">
+                    <ResponsiveContainer width="100%" height={250}>
                       <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
                         <PolarGrid stroke="#374151" />
                         <PolarAngleAxis dataKey="subject" tick={{ fill: '#94a3b8', fontSize: 10 }} />
@@ -1395,7 +1395,7 @@ function App() {
                 <h2 className="section-title text-gray">Progress Trend</h2>
                 <div className="trend-container">
                   {chartData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
+                    <ResponsiveContainer width="100%" height={250}>
                       <LineChart data={chartData}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} />
                         <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 9 }} />
@@ -1781,8 +1781,8 @@ function App() {
             </button>
           </div>
 
-          
-      </div>
+
+        </div>
       )}
     </GoogleOAuthProvider>
   );

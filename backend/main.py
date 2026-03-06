@@ -9,13 +9,13 @@ from passlib.context import CryptContext
 from typing import List
 
 # Auth setups
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -42,34 +42,43 @@ def home():
 @app.post("/signup")
 def signup(request: AuthRequest):
     db = SessionLocal()
-    existing_user = db.query(User).filter(User.email == request.email).first()
-    if existing_user:
+    try:
+        existing_user = db.query(User).filter(User.email == request.email).first()
+        if existing_user:
+            raise HTTPException(status_code=400, detail="Email already registered")
+        
+        new_user = User(
+            email=request.email,
+            password_hash=pwd_context.hash(request.password) if request.password else None,
+            full_name=request.full_name
+        )
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+        return {"id": new_user.id, "email": new_user.email, "name": new_user.full_name}
+    except Exception as e:
+        db.rollback()
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
         db.close()
-        raise HTTPException(status_code=400, detail="Email already registered")
-    
-    new_user = User(
-        email=request.email,
-        password_hash=pwd_context.hash(request.password),
-        full_name=request.full_name
-    )
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-    user_data = {"id": new_user.id, "email": new_user.email, "name": new_user.full_name}
-    db.close()
-    return user_data
 
 @app.post("/login")
 def login(request: AuthRequest):
     db = SessionLocal()
-    user = db.query(User).filter(User.email == request.email).first()
-    if not user or not pwd_context.verify(request.password, user.password_hash):
+    try:
+        user = db.query(User).filter(User.email == request.email).first()
+        if not user or not user.password_hash or not pwd_context.verify(request.password, user.password_hash):
+            raise HTTPException(status_code=400, detail="Invalid email or password")
+        
+        return {"id": user.id, "email": user.email, "name": user.full_name}
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
         db.close()
-        raise HTTPException(status_code=400, detail="Invalid email or password")
-    
-    user_data = {"id": user.id, "email": user.email, "name": user.full_name}
-    db.close()
-    return user_data
 
 @app.post("/google-login")
 def google_login(request: GoogleAuthRequest):
@@ -243,7 +252,7 @@ def get_efficiency(request: CodeRequest):
 
 @app.post("/analyze")
 def analyze(request: CodeRequest):
-    result = analyze_code(request.code)
+    result = analyze_code(request.code, request.language)
 
     db = SessionLocal()
     try:
